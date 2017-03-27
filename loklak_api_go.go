@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"io/ioutil"
 	"os"
-
-	"github.com/hokaccha/go-prettyjson"
 )
 
-// The Loklak Object structure.
-type Loklak struct {
-	baseURL    string
+
+// Loklak is a string that contains functions that acts as calls to the API
+type Loklak string
+
+// Query is a object used to represent the options for various search functions
+type Query struct {
 	Name       string
 	Followers  string
 	Following  string
@@ -30,47 +32,40 @@ type Loklak struct {
 	OrderBy    string
 }
 
-// Initiation of the loklak object
-func (l *Loklak) Connect(urlString string) {
-	u, err := url.Parse(urlString)
-	if (err != nil) {
-		fmt.Println(u)
-		fatal(err)
-	} else {
-		l.baseURL = urlString
+// Returns the raw result of the API function defined by call with POST data of values
+func (l Loklak) CallRaw(call string, values url.Values) ([]byte, error) {
+	resp, err := http.PostForm(string(l) + "/api/" + call, values)
+	if err != nil {
+		return nil, fmt.Errorf("loklak: error while doing a http post: %v", err)
 	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("loklak: error while reading body: %v", err)
+	}
+
+	return body, nil
 }
 
-// A generic query URL request and fetch JSON response
-// This should be suitable for a majority of the JSON based responses
-// Plain text and CSV format responses need another custom control function.
-// Function name: getJSON()
-// Scope        : globally accessible
-// Parameters   : string              , Variable => route
-// Return Types : JSON Response       , Variable => string
-//              : Error Response      , Variable => error
-//
-// Makes a request to the given URL and returns the JSON response obtained
-// and error if any.
-
-func getJSON(route string) (string, error) {
-	r, err := http.Get(route)
+// Call parses the JSON-encoded API defined by call with POST data of values and stores the result in the value pointed to by v
+func (l Loklak) Call(call string, values url.Values, v interface{}) error {
+	data, err := l.CallRaw(call, values)
 	if err != nil {
-		return "", err
+		return err
 	}
-	defer r.Body.Close()
+	
+	err = json.Unmarshal(data, v)
+	if err != nil {
+		return fmt.Errorf("loklak: error while unmarshal json data: %v", err)
+	}
 
-	var b interface{}
-	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-		return "", err
-	}
-	out, err := prettyjson.Marshal(b)
-	return string(out), err
+	return nil
 }
 
 
 // The API function for the /api/hello.json api call.
-func (l *Loklak) Hello() string {
+func (l Loklak) Hello() string {
 	apiQuery := l.baseURL + "api/hello.json"
 	out, err := getJSON(apiQuery)
 	if err != nil {
@@ -80,7 +75,7 @@ func (l *Loklak) Hello() string {
 }
 
 // The API function for the /api/peers.json api call.
-func (l *Loklak) Peers() string {
+func (l Loklak) Peers() string {
 	apiQuery := l.baseURL + "api/peers.json"
 	out, err := getJSON(apiQuery)
 	if err != nil {
@@ -90,7 +85,7 @@ func (l *Loklak) Peers() string {
 }
 
 // The API function for the /api/status.json api call.
-func (l *Loklak) Status() string {
+func (l Loklak) Status() string {
 	apiQuery := l.baseURL + "api/status.json"
 	out, err := getJSON(apiQuery)
 	if err != nil {
@@ -100,7 +95,7 @@ func (l *Loklak) Status() string {
 }
 
 // The API Function for the /api/apps.json api call.
-func (l *Loklak) Apps() string {
+func (l Loklak) Apps() string {
 	apiQuery := l.baseURL + "api/apps.json"
 	out, err := getJSON(apiQuery)
 	if err != nil {
@@ -111,7 +106,7 @@ func (l *Loklak) Apps() string {
 
 // The API Function for /api/settings.json api call.
 // This is only a localhost query
-func (l *Loklak) Settings() string {
+func (l Loklak) Settings() string {
 	apiQuery := "http://localhost:9000/api/settings.json"
 	out, err := getJSON(apiQuery)
 	if err != nil {
@@ -124,7 +119,7 @@ func (l *Loklak) Settings() string {
 // Format in order as 
 // Search function is implemented as a function and not as a method
 // Package the parameters required in the loklak object and pass accordingly
-func Search(l *Loklak) string {
+func Search(l Loklak) string {
 	apiQuery := l.baseURL + "api/search.json"
 	req, _ := http.NewRequest("GET", apiQuery, nil)
 
@@ -161,7 +156,7 @@ func Search(l *Loklak) string {
 }
 
 // The API Function for /api/user.json api call
-func User(l *Loklak) string {
+func User(l Loklak) string {
 	apiQuery := l.baseURL + "api/user.json"
 	req, _ := http.NewRequest("GET", apiQuery, nil)
 
@@ -187,7 +182,7 @@ func User(l *Loklak) string {
 }
 
 // The API Function for the /api/account.json api call
-func Account(l *Loklak) string {
+func Account(l Loklak) string {
 	apiQuery := "http://localhost:9000/api/account.json"
 
 	req, _ := http.NewRequest("GET", apiQuery, nil)
@@ -209,7 +204,7 @@ func Account(l *Loklak) string {
 }
 
 // The API Function for /api/suggest.json api call
-func Suggest(l *Loklak) string {
+func Suggest(l Loklak) string {
 	apiQuery := l.baseURL + "api/suggest.json"
 
 	req, _ := http.NewRequest("GET", apiQuery, nil)
